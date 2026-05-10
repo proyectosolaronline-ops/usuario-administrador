@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transmisor — Live Shopping Pro</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+    <style>
+        /* ── TRANSMISOR ORIGINAL (sin cambios) ── */
+        :root { --primary: #a3e635; --bg: #0f172a; --accent: #22c55e; }
+        body { 
+            margin: 0; font-family: 'Segoe UI', Roboto, sans-serif; 
+            background: var(--bg); color: white; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            height: 100vh;
+        }
+        .card { 
+            background: #1e293b; padding: 2.5rem; border-radius: 24px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5); text-align: center; 
+            width: 90%; max-width: 450px; border: 1px solid rgba(255,255,255,0.1); 
+        }
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 16px; border-radius: 99px; background: rgba(0,0,0,0.3);
+            margin-bottom: 20px; font-size: 0.75rem; font-weight: 700; letter-spacing: 1px;
+        }
+        #status-dot { width: 10px; height: 10px; background: #ef4444; border-radius: 50%; }
+        #status-dot.online { background: var(--primary); box-shadow: 0 0 10px var(--primary); }
+        #btn-action { 
+            background: var(--primary); color: #064e3b; border: none; 
+            padding: 1.2rem 2rem; border-radius: 16px; font-weight: 900; 
+            font-size: 1.1rem; cursor: pointer; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            width: 100%; text-transform: uppercase;
+        }
+        #btn-action:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(163, 230, 53, 0.3); }
+        #btn-action.live { background: #ef4444; color: white; }
+        #btn-action:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+        .link-box { 
+            margin-top: 25px; background: rgba(163, 230, 53, 0.05); 
+            border: 1px solid rgba(163, 230, 53, 0.2); border-radius: 12px; padding: 15px;
+            display: none;
+        }
+        .url-text { 
+            font-family: monospace; font-size: 0.8rem; color: var(--primary); 
+            word-break: break-all; display: block; margin-bottom: 10px;
+        }
+        .copy-btn {
+            background: var(--primary); color: #064e3b; border: none;
+            padding: 5px 12px; border-radius: 6px; font-size: 0.7rem; font-weight: bold; cursor: pointer;
+        }
+        #btn-paste {
+            margin-top: 12px; width: 100%; padding: 0.8rem;
+            background: transparent; border: 1px solid rgba(163,230,53,0.4);
+            color: var(--primary); border-radius: 12px; font-size: 0.85rem;
+            font-weight: 700; cursor: pointer; letter-spacing: 1px;
+        }
+        /* badge usuario logueado */
+        .user-badge {
+            position: fixed; top: 16px; right: 16px; z-index: 999;
+            background: rgba(30,41,59,0.95); border: 1px solid rgba(163,230,53,0.25);
+            border-radius: 99px; padding: 6px 14px 6px 10px;
+            display: flex; align-items: center; gap: 8px; font-size: 0.75rem;
+        }
+        .user-badge span { color: #94a3b8; }
+        .user-badge strong { color: var(--primary); }
+        .logout-mini {
+            background: none; border: none; color: #ef4444; cursor: pointer;
+            font-size: 0.7rem; font-weight: 700; letter-spacing: 0.5px; padding: 0; margin-left: 4px;
+        }
+
+        /* ══════════════════════════════════════════
+           LOGIN OVERLAY — pantalla previa al transmisor
+           ══════════════════════════════════════════ */
+        #loginOverlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: #07070f;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'DM Sans', sans-serif;
+        }
+        /* grid animado de fondo */
+        #loginOverlay::before {
+            content: '';
+            position: absolute; inset: 0;
+            background-image:
+                linear-gradient(rgba(0,212,170,.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,212,170,.04) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: gridDrift 20s linear infinite;
+        }
+        @keyframes gridDrift { to { transform: translate(40px,40px); } }
+
+        .l-orb {
+            position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none;
+        }
+        .l-orb-1 { width:400px;height:400px;background:rgba(124,58,237,.18);top:-100px;right:-100px; animation:lf1 8s ease-in-out infinite; }
+        .l-orb-2 { width:300px;height:300px;background:rgba(0,212,170,.12);bottom:-80px;left:-80px;  animation:lf2 10s ease-in-out infinite; }
+        @keyframes lf1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-30px,30px)} }
+        @keyframes lf2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(20px,-20px)} }
+
+        .l-card {
+            position: relative; z-index: 1;
+            background: #0f0f1e;
+            border: 1px solid #1e1e3a;
+            border-radius: 24px;
+            padding: 48px 44px;
+            width: 100%; max-width: 420px;
+            box-shadow: 0 0 0 1px rgba(0,212,170,.08), 0 40px 80px rgba(0,0,0,.5);
+            animation: lcardIn .6s cubic-bezier(.16,1,.3,1) both;
+            color: #e8e8f0;
+        }
+        @keyframes lcardIn { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:none} }
+
+        .l-logo { display:flex; align-items:center; gap:10px; margin-bottom:32px; }
+        .l-logo-dot {
+            width:32px; height:32px; border-radius:8px;
+            background: linear-gradient(135deg,#00d4aa,#7c3aed);
+            box-shadow: 0 0 20px rgba(0,212,170,.4);
+        }
+        .l-logo-text { font-family:'Syne',sans-serif; font-weight:800; font-size:18px; letter-spacing:1px; }
+
+        .l-card h2 { font-family:'Syne',sans-serif; font-size:24px; font-weight:700; margin-bottom:6px; color:#e8e8f0; }
+        .l-subtitle { color:#6b6b8a; font-size:14px; margin-bottom:28px; }
+
+        .l-step { display:none; }
+        .l-step.active { display:block; animation: lfadeIn .3s ease; }
+        @keyframes lfadeIn { from{opacity:0;transform:translateX(8px)} to{opacity:1;transform:none} }
+
+        .l-label { display:block; font-size:11px; font-weight:500; color:#6b6b8a; text-transform:uppercase; letter-spacing:.8px; margin-bottom:7px; }
+
+        .l-input {
+            width:100%; padding:14px 16px;
+            background:rgba(255,255,255,.04);
+            border:1px solid #1e1e3a;
+            border-radius:12px; color:#e8e8f0;
+            font-family:'DM Sans',sans-serif; font-size:15px; outline:none;
+            transition:border-color .2s, box-shadow .2s;
+            margin-bottom: 18px; box-sizing: border-box;
+        }
+        .l-input:focus { border-color:#00d4aa; box-shadow:0 0 0 3px rgba(0,212,170,.12); }
+
+        .l-otp-row { display:flex; gap:10px; justify-content:center; margin:8px 0; }
+        .l-otp-digit {
+            width:52px; height:58px;
+            background:rgba(255,255,255,.04);
+            border:1px solid #1e1e3a;
+            border-radius:12px; color:#e8e8f0;
+            font-size:22px; font-weight:700; text-align:center;
+            outline:none; transition:border-color .2s, box-shadow .2s;
+            caret-color:#00d4aa;
+        }
+        .l-otp-digit:focus { border-color:#00d4aa; box-shadow:0 0 0 3px rgba(0,212,170,.15); }
+
+        .l-btn {
+            width:100%; padding:15px;
+            background:linear-gradient(135deg,#00d4aa,#7c3aed);
+            border:none; border-radius:12px; color:#fff;
+            font-family:'Syne',sans-serif; font-size:15px; font-weight:700;
+            letter-spacing:.5px; cursor:pointer;
+            transition:opacity .2s, transform .15s, box-shadow .2s;
+            box-shadow:0 4px 20px rgba(0,212,170,.25); margin-top:4px;
+        }
+        .l-btn:hover { opacity:.92; transform:translateY(-1px); }
+        .l-btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+
+        .l-btn-ghost {
+            width:100%; padding:12px; background:transparent;
+            border:1px solid #1e1e3a; border-radius:12px;
+            color:#6b6b8a; font-size:13px; cursor:pointer; margin-top:10px;
+            transition:border-color .2s, color .2s; font-family:'DM Sans',sans-serif;
+        }
+        .l-btn-ghost:hover { border-color:#00d4aa; color:#00d4aa; }
+
+        .l-msg {
+            padding:12px 16px; border-radius:10px;
+            font-size:13px; margin-bottom:14px; display:none;
+        }
+        .l-msg.show { display:block; animation:lfadeIn .3s ease; }
+        .l-msg.error   { background:rgba(255,77,109,.1); border:1px solid rgba(255,77,109,.3); color:#ff8fa0; }
+        .l-msg.success { background:rgba(0,212,170,.08); border:1px solid rgba(0,212,170,.25); color:#00d4aa; }
+
+        .l-timer { text-align:center; font-size:12px; color:#6b6b8a; margin-top:10px; }
+        .l-timer span { color:#00d4aa; font-weight:600; }
+
+        .l-spinner {
+            display:inline-block; width:14px; height:14px;
+            border:2px solid rgba(255,255,255,.3); border-top-color:#fff;
+            border-radius:50%; animation:lspin .7s linear infinite;
+            vertical-align:middle; margin-right:6px;
+        }
+        @keyframes lspin { to{transform:rotate(360deg)} }
+    </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     LOGIN OVERLAY
+     ══════════════════════════════════════════ -->
+<div id="loginOverlay">
+    <div class="l-orb l-orb-1"></div>
+    <div class="l-orb l-orb-2"></div>
+
+    <div class="l-card">
+        <div class="l-logo">
+            <div class="l-logo-dot"></div>
+            <span class="l-logo-text">LIVE SHOPPING PRO</span>
+        </div>
+
+        <!-- Step 1: Email -->
+        <div class="l-step active" id="lstep1">
+            <h2>Acceso Transmisor</h2>
+            <p class="l-subtitle">Ingresa tu correo para recibir un código de acceso</p>
+
+            <div id="lmsg1" class="l-msg"></div>
+
+            <label class="l-label">Correo electrónico</label>
+            <input type="email" id="lEmailInput" class="l-input" placeholder="usuario@correo.com" autocomplete="email"/>
+
+            <button class="l-btn" id="lBtnSend" onclick="lSendOTP()">Enviar código</button>
+        </div>
+
+        <!-- Step 2: OTP -->
+        <div class="l-step" id="lstep2">
+            <h2>Código de acceso</h2>
+            <p class="l-subtitle" id="lSubtitleOTP">Ingresa el código enviado a tu correo</p>
+
+            <div id="lmsg2" class="l-msg"></div>
+
+            <div class="l-otp-row">
+                <input class="l-otp-digit" maxlength="1" inputmode="numeric" id="ld0"/>
+                <input class="l-otp-digit" maxlength="1" inputmode="numeric" id="ld1"/>
+                <input class="l-otp-digit" maxlength="1" inputmode="numeric" id="ld2"/>
+                <input class="l-otp-digit" maxlength="1" inputmode="numeric" id="ld3"/>
+                <input class="l-otp-digit" maxlength="1" inputmode="numeric" id="ld4"/>
+                <input class="l-otp-digit" maxlength="1" inputmode="numeric" id="ld5"/>
+            </div>
+
+            <div class="l-timer">Expira en <span id="lTimerTxt">10:00</span></div>
+
+            <button class="l-btn" id="lBtnVerify" onclick="lVerifyOTP()" style="margin-top:18px">Verificar código</button>
+            <button class="l-btn-ghost" onclick="lGoBack()">← Cambiar correo</button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     BADGE USUARIO (visible tras login)
+     ══════════════════════════════════════════ -->
+<div class="user-badge" id="userBadge" style="display:none">
+    <span>👤 <strong id="badgeNombre"></strong></span>
+    <button class="logout-mini" onclick="lLogout()">SALIR</button>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TRANSMISOR ORIGINAL — sin modificaciones
+     ══════════════════════════════════════════ -->
+<div class="card">
+    <div class="status-pill">
+        <div id="status-dot"></div>
+        <span id="status-text">CONECTANDO A PEERJS...</span>
+    </div>
+
+    <h2 style="margin: 0 0 10px 0;">Panel Transmisor</h2>
+    <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 30px;">
+        Transmite la pestaña de tu tienda a celulares en tiempo real.
+    </p>
+
+    <button id="btn-action" onclick="handleStream()" disabled>Espere...</button>
+    <button id="btn-paste" onclick="pasteUrl()">📋 PEGAR LINK DE TIENDA</button>
+    
+    <div id="link-container" class="link-box">
+        <span style="display:block; font-size: 0.7rem; color: #94a3b8; margin-bottom: 5px;">LINK PARA EL CLIENTE:</span>
+        <span id="link-url" class="url-text"></span>
+        <button class="copy-btn" onclick="copyUrl()">COPIAR LINK</button>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+//  AUTH — Login OTP (prefijo "l" en todas las vars para no colisionar)
+// ══════════════════════════════════════════════════════════════
+const L_API = "https://script.google.com/macros/s/AKfycbynMjkWu4Kv5dcKj1EslFuzjSYyejxohjiRFQn3glfWeHcaCUPqjfGAmnqTXKReheQ/exec";
+
+let lEmail = "";
+let lTimer = null;
+
+// OTP inputs
+document.querySelectorAll('.l-otp-digit').forEach((inp, i) => {
+    inp.addEventListener('input', e => {
+        e.target.value = e.target.value.replace(/\D/g,'');
+        if (e.target.value && i < 5) document.getElementById('ld'+(i+1)).focus();
+    });
+    inp.addEventListener('keydown', e => {
+        if (e.key==='Backspace' && !e.target.value && i>0) document.getElementById('ld'+(i-1)).focus();
+        if (e.key==='Enter') lVerifyOTP();
+    });
+    inp.addEventListener('paste', e => {
+        e.preventDefault();
+        const p = e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
+        p.split('').forEach((ch,j) => { const el=document.getElementById('ld'+j); if(el) el.value=ch; });
+        if (p.length) document.getElementById('ld'+(Math.min(p.length,5))).focus();
+    });
+});
+document.getElementById('lEmailInput').addEventListener('keydown', e => { if(e.key==='Enter') lSendOTP(); });
+
+async function lSendOTP() {
+    const email = document.getElementById('lEmailInput').value.trim();
+    if (!email) return lShowMsg('lmsg1','Ingresa tu correo electrónico','error');
+
+    const btn = document.getElementById('lBtnSend');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="l-spinner"></span> Enviando...';
+
+    try {
+        const res = await lPost({ action:'sendOTP', email });
+        if (res.ok) {
+            lEmail = email;
+            document.getElementById('lSubtitleOTP').textContent = `Código enviado a ${email}`;
+            document.getElementById('lstep1').classList.remove('active');
+            document.getElementById('lstep2').classList.add('active');
+            document.getElementById('ld0').focus();
+            lStartTimer(10*60);
+        } else {
+            lShowMsg('lmsg1', res.msg, 'error');
+        }
+    } catch(e) {
+        lShowMsg('lmsg1','Error de conexión con el servidor','error');
+    }
+    btn.disabled = false;
+    btn.innerHTML = 'Enviar código';
+}
+
+async function lVerifyOTP() {
+    const otp = [0,1,2,3,4,5].map(i=>document.getElementById('ld'+i).value).join('');
+    if (otp.length < 6) return lShowMsg('lmsg2','Ingresa los 6 dígitos','error');
+
+    const btn = document.getElementById('lBtnVerify');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="l-spinner"></span> Verificando...';
+
+    try {
+        const res = await lPost({ action:'verifyOTP', email: lEmail, otp });
+        if (res.ok) {
+            clearInterval(lTimer);
+            // Guardar sesión
+            sessionStorage.setItem('lsession', JSON.stringify(res));
+            // Mostrar badge
+            document.getElementById('badgeNombre').textContent = res.nombre;
+            document.getElementById('userBadge').style.display = 'flex';
+            // Ocultar overlay con transición
+            const overlay = document.getElementById('loginOverlay');
+            overlay.style.transition = 'opacity .5s ease';
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.style.display = 'none', 500);
+        } else {
+            lShowMsg('lmsg2', res.msg, 'error');
+            [0,1,2,3,4,5].forEach(i=>document.getElementById('ld'+i).value='');
+            document.getElementById('ld0').focus();
+        }
+    } catch(e) {
+        lShowMsg('lmsg2','Error de conexión','error');
+    }
+    btn.disabled = false;
+    btn.innerHTML = 'Verificar código';
+}
+
+function lGoBack() {
+    clearInterval(lTimer);
+    document.getElementById('lstep2').classList.remove('active');
+    document.getElementById('lstep1').classList.add('active');
+    [0,1,2,3,4,5].forEach(i=>document.getElementById('ld'+i).value='');
+}
+
+function lLogout() {
+    sessionStorage.removeItem('lsession');
+    document.getElementById('userBadge').style.display = 'none';
+    const overlay = document.getElementById('loginOverlay');
+    overlay.style.opacity = '1';
+    overlay.style.display = 'flex';
+    // Reset form
+    lGoBack();
+    document.getElementById('lEmailInput').value = '';
+    lEmail = '';
+}
+
+function lShowMsg(id, text, type) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = `l-msg ${type} show`;
+}
+
+function lStartTimer(seconds) {
+    clearInterval(lTimer);
+    let remaining = seconds;
+    const el = document.getElementById('lTimerTxt');
+    lTimer = setInterval(() => {
+        remaining--;
+        const m = Math.floor(remaining/60).toString().padStart(2,'0');
+        const s = (remaining%60).toString().padStart(2,'0');
+        el.textContent = `${m}:${s}`;
+        if (remaining <= 0) {
+            clearInterval(lTimer);
+            el.textContent = 'expirado';
+            lShowMsg('lmsg2','El código expiró. Solicita uno nuevo.','error');
+        }
+    }, 1000);
+}
+
+async function lPost(data) {
+    const r = await fetch(L_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(data)
+    });
+    return r.json();
+}
+
+// Restaurar sesión si ya estaba logueado en esta pestaña
+(function() {
+    const saved = sessionStorage.getItem('lsession');
+    if (saved) {
+        try {
+            const s = JSON.parse(saved);
+            document.getElementById('badgeNombre').textContent = s.nombre;
+            document.getElementById('userBadge').style.display = 'flex';
+            document.getElementById('loginOverlay').style.display = 'none';
+        } catch(e) { sessionStorage.removeItem('lsession'); }
+    }
+})();
+
+
+// ══════════════════════════════════════════════════════════════
+//  TRANSMISOR ORIGINAL — código sin modificar
+// ══════════════════════════════════════════════════════════════
+let TIENDA_URL = "https://proyectosolaronline-ops.github.io/superOnline-Tienda/index.html?backend=https%3A%2F%2Fscript.google.com%2Fmacros%2Fs%2FAKfycbwQ_ESx2c-3DL83b_-ujjmvevSBGtwjPZ0e1wEHv3cnLbJOplTJDYUb_UiRVyTYXik%2Fexec&store=store_f2fcc889b992";
+
+const RECEPTOR_FILE = "receptor.html";
+
+let peer, localStream, isLive = false;
+const connections = {};
+
+const btnAction   = document.getElementById('btn-action');
+const statusDot   = document.getElementById('status-dot');
+const statusText  = document.getElementById('status-text');
+const linkContainer = document.getElementById('link-container');
+const linkUrl     = document.getElementById('link-url');
+
+peer = new Peer({
+    config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
+});
+
+peer.on('open', (id) => {
+    statusText.textContent = "SISTEMA LISTO";
+    statusDot.className = "online";
+    btnAction.disabled = false;
+    btnAction.textContent = "Transmitir Tienda";
+    const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf("/") + 1);
+    const finalLink = `${baseUrl}${RECEPTOR_FILE}?host=${id}&url=${encodeURIComponent(TIENDA_URL)}`;
+    linkUrl.textContent = finalLink;
+    linkContainer.style.display = 'block';
+});
+
+peer.on('connection', (conn) => {
+    connections[conn.peer] = conn;
+    console.log("Cliente conectado:", conn.peer);
+    if (isLive && localStream) {
+        peer.call(conn.peer, localStream);
+    }
+});
+
+async function handleStream() {
+    if (isLive) { location.reload(); return; }
+    try {
+        localStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: { ideal: 15, max: 20 } },
+            audio: false
+        });
+        isLive = true;
+        btnAction.textContent = "Detener Vivo";
+        btnAction.classList.add('live');
+        statusText.textContent = "EN VIVO AHORA";
+        Object.keys(connections).forEach(peerId => { peer.call(peerId, localStream); });
+        localStream.getVideoTracks()[0].onended = () => location.reload();
+    } catch (err) {
+        console.error(err);
+        alert("Error: Debes seleccionar la pestaña de la tienda para transmitir.");
+    }
+}
+
+function copyUrl() {
+    navigator.clipboard.writeText(linkUrl.textContent);
+    alert("¡Link copiado! Envíalo por WhatsApp a los celulares.");
+}
+
+async function pasteUrl() {
+    try {
+        const text = await navigator.clipboard.readText();
+        if (text.startsWith("http")) {
+            TIENDA_URL = text.trim();
+            const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf("/") + 1);
+            const finalLink = `${baseUrl}${RECEPTOR_FILE}?host=${peer.id}&url=${encodeURIComponent(TIENDA_URL)}`;
+            linkUrl.textContent = finalLink;
+            alert("✅ Link actualizado.");
+        } else {
+            alert("⚠️ El texto copiado no es un link válido.");
+        }
+    } catch (err) {
+        alert("❌ Permite el acceso al portapapeles en el navegador.");
+    }
+}
+</script>
+</body>
+</html>
